@@ -9,7 +9,7 @@ DEFAULT_PORTS = {'t':'50001', 's':'50002', 'h':'8081', 'g':'8082'}
 
 #TODO: update servers
 DEFAULT_SERVERS = {
-	'digibytewiki.com': DEFAULT_PORTS,
+	'electrum1.auroracoin.is': DEFAULT_PORTS,
 }
 
 DISCONNECTED_RETRY_INTERVAL = 60

@@ -30,7 +30,7 @@ except ImportError:
     from scrypt import scrypt_1024_1_1_80 as getPoWScryptHash
 
 try:
-    from groestl_hash import getPoWHash as getPoWGroestlHash
+    from groestl_hash import getGroestlcoinHash as getPoWGroestlHash
 except ImportError:
     print_msg("Warning: groestl_hash not available, please install it")
     raise

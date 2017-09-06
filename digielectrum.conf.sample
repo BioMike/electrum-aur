@@ -6,7 +6,7 @@
 # that can be rewritten by the client
 
 [client]
-server = digibytewiki.com:50001:t
+server = electrum1.auroracoin.is:50001:t
 proxy = None
 gap_limit = 5
 # booleans use python syntax
