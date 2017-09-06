@@ -41,8 +41,8 @@ cd qubit-hash-python
 sudo python setup.py install
 cd ..
 
-git clone https://bitbucket.org/cryptopools/groestl_hash_python
-cd groestl_hash_python
+git clone https://github.com/BioMike/py-bca-groestl.git
+cd py-bca-groestl
 sudo python setup.py install
 cd ..
 
