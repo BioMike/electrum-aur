@@ -1,0 +1,17 @@
+# If you want electrum to appear in a linux app launcher ("start menu"), install this by doing:
+# sudo desktop-file-install electrum-aur.desktop
+
+[Desktop Entry]
+Comment=Lightweight Auroracoin Client
+Exec=electrum-aur %u
+GenericName[en_US]=Electrum-AUR
+GenericName=Electrum-AUR
+Icon=/usr/share/app-install/icons/digielectrum.png
+Name[en_US]=Electrum Auroracoin Wallet
+Name=Electrum Auroracoin Wallet
+Categories=Network;
+StartupNotify=false
+Terminal=false
+Type=Application
+MimeType=x-scheme-handler/auroracoin
+
