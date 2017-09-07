@@ -4,7 +4,7 @@ import os
 
 from util import user_dir, print_error, print_msg
 
-SYSTEM_CONFIG_PATH = "/etc/digielectrum.conf"
+SYSTEM_CONFIG_PATH = "/etc/electrum-aur.conf"
 
 config = None
 
@@ -91,12 +91,12 @@ class SimpleConfig(object):
         if not os.path.exists(self.path):
             os.mkdir(self.path)
 
-        print_error( "electrum directory", self.path)
+        print_error( "electrum-aur directory", self.path)
 
     def set_key(self, key, value, save = True):
         if not self.is_modifiable(key):
             print "Warning: not changing key '%s' because it is not modifiable" \
-                  " (passed as command line option or defined in /etc/digielectrum.conf)"%key
+                  " (passed as command line option or defined in /etc/electrum-aur.conf)"%key
             return
 
         with self.lock:
@@ -134,13 +134,13 @@ class SimpleConfig(object):
             os.chmod(path, stat.S_IREAD | stat.S_IWRITE)
 
 def read_system_config(path=SYSTEM_CONFIG_PATH):
-    """Parse and return the system config settings in /etc/digielectrum.conf."""
+    """Parse and return the system config settings in /etc/electrum-aur.conf."""
     result = {}
     if os.path.exists(path):
         try:
             import ConfigParser
         except ImportError:
-            print "cannot parse digielectrum.conf. please install ConfigParser"
+            print "cannot parse electrum-aur.conf. please install ConfigParser"
             return
 
         p = ConfigParser.ConfigParser()
@@ -154,7 +154,7 @@ def read_system_config(path=SYSTEM_CONFIG_PATH):
     return result
 
 def read_user_config(path):
-    """Parse and store the user config settings in digielectrum.conf into user_config[]."""
+    """Parse and store the user config settings in electrum-aur.conf into user_config[]."""
     if not path: return {}  # Return a dict, since we will call update() on it.
 
     config_path = os.path.join(path, "config")

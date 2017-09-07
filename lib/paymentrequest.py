@@ -61,7 +61,7 @@ def load_certificates():
         ca_f = open(ca_path, 'r')
     except Exception:
         print "ERROR: Could not open %s"%ca_path
-        print "ca-bundle.crt file should be placed in ~/.digielectrum/ca/ca-bundle.crt"
+        print "ca-bundle.crt file should be placed in ~/.electrum-aur/ca/ca-bundle.crt"
         print "Documentation on how to download or create the file here: http://curl.haxx.se/docs/caextract.html"
         print "Payment will continue with manual verification."
         return False

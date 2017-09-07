@@ -167,7 +167,7 @@ everything = 42
 
     def setUp(self):
         super(TestSystemConfig, self).setUp()
-        self.thefile = tempfile.mkstemp(suffix=".digielectrum.test.conf")[1]
+        self.thefile = tempfile.mkstemp(suffix=".electrum-aur.test.conf")[1]
 
     def tearDown(self):
         super(TestSystemConfig, self).tearDown()
