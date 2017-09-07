@@ -29,7 +29,7 @@ from electrum_dgb.bitcoin import is_valid
 from electrum_dgb import WalletStorage, Wallet
 
 Gdk.threads_init()
-APP_NAME = "DigiElectrum"
+APP_NAME = "Electrum-AUR"
 import platform
 MONOSPACE_FONT = 'Lucida Console' if platform.system() == 'Windows' else 'monospace'
 
@@ -457,7 +457,7 @@ class ElectrumWindow:
         self.num_zeros = int(self.config.get('num_zeros',0))
         self.window = Gtk.Window(Gtk.WindowType.TOPLEVEL)
         self.window.connect('key-press-event', self.on_key)
-        title = 'DigiElectrum ' + self.wallet.electrum_version + '  -  ' + self.config.path
+        title = 'Electrum-AUR ' + self.wallet.electrum_version + '  -  ' + self.config.path
         if not self.wallet.seed: title += ' [seedless]'
         self.window.set_title(title)
         self.window.connect("destroy", Gtk.main_quit)
@@ -781,7 +781,7 @@ class ElectrumWindow:
             to_address = r
 
         if not is_valid(to_address):
-            self.show_message( "invalid digibyte address:\n"+to_address)
+            self.show_message( "invalid auroracoin address:\n"+to_address)
             return
 
         try:

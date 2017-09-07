@@ -80,7 +80,7 @@ class ElectrumGui:
         m.addAction(_("Show/Hide"), self.show_or_hide)
         m.addAction(_("Dark/Light"), self.toggle_tray_icon)
         m.addSeparator()
-        m.addAction(_("Exit DigiElectrum"), self.close)
+        m.addAction(_("Exit Electrum-AUR"), self.close)
         self.tray.setContextMenu(m)
 
     def toggle_tray_icon(self):
@@ -170,7 +170,7 @@ class ElectrumGui:
             self.dark_icon = self.config.get("dark_icon", False)
             icon = QIcon(":icons/electrum_dark_icon.png") if self.dark_icon else QIcon(':icons/electrum_light_icon.png')
             self.tray = QSystemTrayIcon(icon, None)
-            self.tray.setToolTip('DigiElectrum')
+            self.tray.setToolTip('Electrum-AUR')
             self.tray.activated.connect(self.tray_activated)
             self.build_tray_menu()
             self.tray.show()

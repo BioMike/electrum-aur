@@ -73,11 +73,11 @@ class BTCAmountEdit(AmountEdit):
         p = self.decimal_point()
         assert p in [2, 5, 8]
         if p == 8:
-            return 'DGB'
+            return 'AUR'
         if p == 5:
-            return 'mDGB'
+            return 'mAUR'
         if p == 2:
-            return 'uDGB'
+            return 'uAUR'
         raise Exception('Unknown base unit')
 
     def get_amount(self):

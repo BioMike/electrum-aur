@@ -453,7 +453,7 @@ def pay_to(recipient, amount, fee, label):
     else:
         password = None
 
-    droid.dialogCreateSpinnerProgress("DigiElectrum", "signing transaction...")
+    droid.dialogCreateSpinnerProgress("Electrum-AUR", "signing transaction...")
     droid.dialogShow()
 
     try:
@@ -487,7 +487,7 @@ def make_new_contact():
     if r:
         data = r['extras']['SCAN_RESULT']
         if data:
-            if re.match('^digibyte:', data):
+            if re.match('^auroracoin:', data):
                 address, _, _, _, _ = util.parse_URI(data)
             elif is_valid(data):
                 address = data
@@ -561,7 +561,7 @@ def main_loop():
                 if receive_addr:
                     amount = modal_input('Amount', 'Amount you want receive. ', '', "numberDecimal")
                     if amount:
-                        receive_addr = 'digibyte:%s?amount=%s'%(receive_addr, amount)
+                        receive_addr = 'auroracoin:%s?amount=%s'%(receive_addr, amount)
 
                 if not receive_addr:
                     out = None
@@ -595,7 +595,7 @@ def payto_loop():
                 amount = droid.fullQueryDetail('amount').result.get('text')
 
                 if not is_valid(recipient):
-                    modal_dialog('Error','Invalid Digibyte address')
+                    modal_dialog('Error','Invalid auroracoin address')
                     continue
 
                 try:
@@ -618,7 +618,7 @@ def payto_loop():
                 if r:
                     data = r['extras']['SCAN_RESULT']
                     if data:
-                        if re.match('^digibyte:', data):
+                        if re.match('^auroracoin:', data):
                             payto, amount, label, _, _ = util.parse_URI(data)
                             droid.fullSetProperty("recipient", "text",payto)
                             droid.fullSetProperty("amount", "text", amount)
@@ -1009,7 +1009,7 @@ class ElectrumGui:
     def restore_wallet(self):
 
         msg = "recovering wallet..."
-        droid.dialogCreateSpinnerProgress("DigiElectrum", msg)
+        droid.dialogCreateSpinnerProgress("Electrum-AUR", msg)
         droid.dialogShow()
 
         wallet.restore(lambda x: None)
