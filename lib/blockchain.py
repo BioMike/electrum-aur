@@ -47,7 +47,7 @@ class Blockchain(threading.Thread):
         self.lock = threading.Lock()
         self.local_height = 0
         self.running = False
-        self.headers_url = 'http://digibytewiki.com/blockchain_headers'
+        #self.headers_url = 'http://digibytewiki.com/blockchain_headers'    URL is broken.
         self.set_local_height()
         self.queue = Queue.Queue()
         header_db_file = sqlite3.connect(self.db_path())
@@ -258,15 +258,18 @@ class Blockchain(threading.Thread):
         if os.path.exists(filename):
             return
         
-        try:
-            import urllib, socket
-            socket.setdefaulttimeout(30)
-            print_error("downloading ", self.headers_url )
-            urllib.urlretrieve(self.headers_url, filename)
-            print_error("done.")
-        except Exception:
-            print_error( "download failed. creating file", filename )
-            open(filename,'wb+').close()
+        
+        # The self.headers_url location is not hosting the headers any more.
+        # Disable the download and create the default file to be populated.
+        #try:
+        #    import urllib, socket
+        #    socket.setdefaulttimeout(30)
+        #    print_error("downloading ", self.headers_url )
+        #    urllib.urlretrieve(self.headers_url, filename)
+        #    print_error("done.")
+        #except Exception:
+        print_error( "download failed. creating file", filename )
+        open(filename,'wb+').close()
 
     def save_chunk(self, index, chunk):
         filename = self.path()
