@@ -124,13 +124,11 @@ class Blockchain(threading.Thread):
             self.network.new_blockchain_height(height, i)
 
 
-                    
-            
     def verify_chain(self, chain):
 
         first_header = chain[0]
         prev_header = self.read_header(first_header.get('block_height') -1)
-        
+
         for header in chain:
 
             height = header.get('block_height')
@@ -164,48 +162,65 @@ class Blockchain(threading.Thread):
 
 
     def verify_chunk(self, index, hexdata):
+        # This is utterly broken, we're not going to be picky
+        # on validating most values now.
+        print_error("verify_chunk %i" % (index, ))
+
         data = hexdata.decode('hex')
         height = index*2016
         num = len(data)/80
 
-        if index == 0:  
+        if index == 0:
             previous_hash = ("0"*64)
         else:
-            prev_header = self.read_header(height-1)
-            if prev_header is None: raise
-            previous_hash = self.hash_header(prev_header)
-
-        bits, target = self.get_target(height, data=data)
+            previous_header = self.read_header(height-1)
+            if previous_header is None: raise
+            previous_hash = self.hash_header(previous_header)
 
         for i in xrange(num):
             height = index*2016 + i
-            bits, target = self.get_target(height, data=data)
             raw_header = data[i*80:(i+1)*80]
             header = self.header_from_string(raw_header)
+
+            bits, target = self.get_target(height, header)
+            _hash = self.hash_header(header)
             version = header.get('version')
-            if version == 2:
-                _hash = self.pow_hash_sha_header(header)
+            if version <= 2:
+                pow_hash = self.pow_hash_scrypt_header(header)
             elif version == 514:
-                _hash = self.pow_hash_scrypt_header(header)
+                pow_hash = self.pow_hash_scrypt_header(header)
             elif version == 1026:
-                _hash = self.pow_hash_groestl_header(header)
+                pow_hash = self.pow_hash_groestl_header(header)
             elif version == 1538:
-                _hash = self.pow_hash_skein_header(header)
+                pow_hash = self.pow_hash_skein_header(header)
             elif version == 2050:
-                _hash = self.pow_hash_qubit_header(header)
+                pow_hash = self.pow_hash_qubit_header(header)
             else:
                 print_error( "error unknown block version")
+
+            # Print the block
+            print_error("hash: %i %s" % (height, _hash))
+            print_error("PoW hash: %s" % (pow_hash, ))
+            print_error("header: %s" % (header, ))
+            print_error("version: %i\n" % (version, ))
+
             assert previous_hash == header.get('prev_block_hash')
             assert bits == header.get('bits')
-            assert int('0x'+_hash,16) < target
+            assert int('0x'+pow_hash,16) < target
+
+            # Store the block to the database (currently very inefficient, but correct on how to do it).
+            header_db_file = sqlite3.connect(self.db_path())
+            header_db = header_db_file.cursor()
+            header_db.execute('''INSERT OR REPLACE INTO headers VALUES ('%s', '%s', '%s')''' % (raw_header.encode('hex'), str(2), str(height)))
+            header_db_file.commit()
+            header_db_file.close()
 
             previous_header = header
-            previous_hash = self.hash_header(header)
+            previous_hash = _hash
 
         self.save_chunk(index, data)
         print_error("validated chunk %d"%height)
 
-        
 
     def header_to_string(self, res):
         s = int_to_hex(res.get('version'),4) \
@@ -311,48 +326,75 @@ class Blockchain(threading.Thread):
                 return h 
 
 
-    def get_target(self, height, chain=None, data=None):
-        if chain is None:
-            chain = []  # Do not use mutables as default values!
+    def get_target(self, height, header):
 
-        header_db_file = sqlite3.connect(self.db_path())
-        header_db = header_db_file.cursor()
         max_target = 0x00000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
-        if height == 0 and data: 
-            header_db.execute('''INSERT OR REPLACE INTO headers VALUES ('%s', '%s', '%s')''' % (data[0:80].encode('hex'), str(2), str(0)))
-            header_db_file.commit()
-            header_db_file.close()
-        if height == 0: return 0x1e0ffff0, 0x00000FFFF0000000000000000000000000000000000000000000000000000000
+        if height <= 135:
+            # Return default values below block 135.
+            return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
+        if height <= 5400:
+            # Return original diff algorithm calculated values.
+            bits, target = self.target_orig(height)
+            return bits, target
+        if height < 225000:
+            # Return KGW calculated values.
+            return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
+        else:
+            # Return multi-algo calculated values.
+            return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
 
-        # Myriadcoin
-        bits = last.get('bits') 
-        # convert to bignum
-        MM = 256*256*256
-        a = bits%MM
-        if a < 0x8000:
-            a *= 256
-        target = (a) * pow(2, 8 * (bits/MM - 3))
+    def bits_to_target(self, bits):
+        # bits to target
+        bitsN = (bits >> 24) & 0xff
+        if not (bitsN >= 0x03 and bitsN <= 0x1e):
+            raise BaseException("First part of bits should be in [0x03, 0x1e]")
+        bitsBase = bits & 0xffffff
+        if not (bitsBase >= 0x8000 and bitsBase <= 0x7fffff):
+            raise BaseException("Second part of bits should be in [0x8000, 0x7fffff]")
+        target = bitsBase << (8 * (bitsN-3))
+        return(target)
 
-        # new target
-        new_target = min( max_target, (target * nActualTimespan)/nAvgInterval )
-        
-        # convert it to bits
-        c = ("%064X"%new_target)[2:]
-        i = 31
-        while c[0:2]=="00":
+    def target_to_bits(self, target):
+        c = ("%064x" % target)[2:]
+        while c[:2] == '00' and len(c) > 6:
             c = c[2:]
-            i -= 1
+        bitsN, bitsBase = len(c) // 2, int('0x' + c[:6], 16)
+        if bitsBase >= 0x800000:
+            bitsN += 1
+            bitsBase >>= 8
+        bits = bitsN << 24 | bitsBase
+        return(bits)
 
-        c = int('0x'+c[0:6],16)
-        if c >= 0x800000: 
-            c /= 256
-            i += 1
+    def target_orig(self, height):
+        max_target = 0x00000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+        # Only recalulate new bits once every 8 blocks.
+        if((height % 8) != 0):
+           previous_header = self.get_block_by_height((height - 1))
+           bits = previous_header.get('bits')
+           target = self.bits_to_target(bits)
+           return bits, target
+        first = self.get_block_by_height((height - 9))
+        last = self.get_block_by_height((height - 1))
 
-        new_bits = c + MM * i
-        header_db_file.commit()
-        header_db_file.close()
+        # bits to target
+        bits = last.get('bits')
+        target = self.bits_to_target(bits)
+        # new target
+        nActualTimespan = last.get('timestamp') - first.get('timestamp')
+        nTargetTimespan = 8 * 10 * 60
+        nActualTimespanMax = ((nTargetTimespan*75)//50)
+        nActualTimespanMin = ((nTargetTimespan*50)//75)
+
+        if (nActualTimespan < nActualTimespanMin):
+            nActualTimespan = nActualTimespanMin
+        if (nActualTimespan > nActualTimespanMax):
+            nActualTimespan = nActualTimespanMax
+
+        new_target_calc = min(max_target, ((target * nActualTimespan) // nTargetTimespan))
+        # convert new target to bits (and to new_target)
+        new_bits = self.target_to_bits(new_target_calc)
+        new_target = self.bits_to_target(new_bits)
         return new_bits, new_target
-
 
     def request_header(self, i, h, queue):
         print_error("requesting header %d from %s"%(h, i.server))
@@ -425,3 +467,12 @@ class Blockchain(threading.Thread):
 
         return True
 
+    def get_block_by_height(self, height):
+        header_db_file = sqlite3.connect(self.db_path())
+        header_db = header_db_file.cursor()
+        header_db.execute("SELECT header FROM headers WHERE height=?", (height, ))
+        header = header_db.fetchone()[0]
+        header_data = self.header_from_string(header.decode('hex'))
+        header_db_file.commit()
+        header_db_file.close()
+        return(header_data)
