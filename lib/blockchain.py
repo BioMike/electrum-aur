@@ -205,7 +205,9 @@ class Blockchain(threading.Thread):
             print_error("version: %i\n" % (version, ))
 
             assert previous_hash == header.get('prev_block_hash')
+            #print_error("Bits: %i (calc) <=> %i (header)" % (bits, header.get('bits')))
             assert bits == header.get('bits')
+            #print_error("Target: %i (calc) <=> %i (pow)" % (target, int('0x'+pow_hash,16)))
             assert int('0x'+pow_hash,16) < target
 
             # Store the block to the database (currently very inefficient, but correct on how to do it).
@@ -338,7 +340,8 @@ class Blockchain(threading.Thread):
             return bits, target
         if height < 225000:
             # Return KGW calculated values.
-            return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
+            bits, target = self.target_kgw(height)
+            return bits, target
         else:
             # Return multi-algo calculated values.
             return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
@@ -391,6 +394,73 @@ class Blockchain(threading.Thread):
             nActualTimespan = nActualTimespanMax
 
         new_target_calc = min(max_target, ((target * nActualTimespan) // nTargetTimespan))
+        # convert new target to bits (and to new_target)
+        new_bits = self.target_to_bits(new_target_calc)
+        new_target = self.bits_to_target(new_bits)
+        return new_bits, new_target
+
+    def target_kgw(self, height):
+        max_target = 0x00000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+        blocktargetspacing = 300
+        pastblocksmin = 144
+        pastblocksmax = 4032
+        pastblockmass = 0
+
+        blockreading_height = height - 1
+        blocklastsolved = self.get_block_by_height(blockreading_height)
+        blockreading = blocklastsolved
+
+        # Bail check
+
+        # Main mass calculation
+        i = 1
+
+        while (blockreading and blockreading_height > 0):
+            # TODO: pastblockmax check
+
+            pastblockmass += 1
+
+            if i == 1:
+                PastDifficultyAverage = self.bits_to_target(blockreading.get('bits'))
+            else:
+                PastDifficultyAverage = ((self.bits_to_target(blockreading.get('bits')) - PastDifficultyAveragePrev) / i) + PastDifficultyAveragePrev
+
+            # Set PastDifficultyAveragePrev
+            PastDifficultyAveragePrev = PastDifficultyAverage
+
+            PastRateActualSeconds = blocklastsolved.get('timestamp') - blockreading.get('timestamp')
+            PastRateTargetSeconds = blocktargetspacing * pastblockmass
+            PastRateAdjustmentRatio = 1.0
+            if PastRateActualSeconds < 0:
+                PastRateActualSeconds = 0
+            if PastRateActualSeconds != 0 and PastRateTargetSeconds != 0:
+                PastRateAdjustmentRatio = float(PastRateTargetSeconds) / float(PastRateActualSeconds)
+
+            EventHorizonDeviation = 1 + (0.7084 * pow((pastblockmass/144.0), -1.228))
+            EventHorizonDeviationFast = EventHorizonDeviation
+            EventHorizonDeviationSlow = 1 / EventHorizonDeviation
+
+            if pastblockmass >= pastblocksmin:
+                if (PastRateAdjustmentRatio <= EventHorizonDeviationSlow) or (PastRateAdjustmentRatio >= EventHorizonDeviationFast):
+                    #assert(BlockReading);
+                    break
+
+            # BlockReading previous validation check.
+            if ((blockreading_height - 1) < 0):
+                #assert(BlockReading);
+                break
+
+            # Lower blockreading to previous block.
+            blockreading_height -= 1
+            blockreading = self.get_block_by_height(blockreading_height)
+            i += 1
+
+        # Calculate new bits
+        if (PastRateActualSeconds != 0 and PastRateTargetSeconds != 0):
+            new_target_calc = min(max_target, ((PastDifficultyAverage * PastRateActualSeconds) // PastRateTargetSeconds))
+        else:
+            new_target_calc = PastDifficultyAverage
+
         # convert new target to bits (and to new_target)
         new_bits = self.target_to_bits(new_target_calc)
         new_target = self.bits_to_target(new_bits)
