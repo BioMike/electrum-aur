@@ -416,7 +416,8 @@ class Blockchain(threading.Thread):
         i = 1
 
         while (blockreading and blockreading_height > 0):
-            # TODO: pastblockmax check
+            if pastblocksmax > 0 and i > pastblocksmax:
+                break;
 
             pastblockmass += 1
 
