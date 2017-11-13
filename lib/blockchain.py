@@ -146,26 +146,43 @@ class Blockchain(threading.Thread):
             height = header.get('block_height')
 
             prev_hash = self.hash_header(prev_header)
-            bits, target = self.get_target(height, chain)
             version = header.get('version')
-            if version == 2:
-                _hash = self.pow_hash_sha_header(header)
+            if version <= 2:
+                algo = "scrypt"
+                pow_hash = self.pow_hash_scrypt_header(header)
             elif version == 514:
-                _hash = self.pow_hash_scrypt_header(header)
+                algo = "sha256d"
+                pow_hash = self.pow_hash_sha_header(header)
+                _hash = pow_hash
             elif version == 1026:
-                _hash = self.pow_hash_groestl_header(header)
+                algo = "groestl"
+                pow_hash = self.pow_hash_groestl_header(header)
             elif version == 1538:
-                _hash = self.pow_hash_skein_header(header)
+                algo = "skein"
+                pow_hash = self.pow_hash_skein_header(header)
             elif version == 2050:
-                _hash = self.pow_hash_qubit_header(header)
+                algo = "qubit"
+                pow_hash = self.pow_hash_qubit_header(header)
             else:
                 print_error( "error unknown block version")
+
+            bits, target = self.get_target(height, algo)
+
             try:
                 assert prev_hash == header.get('prev_block_hash')
                 assert bits == header.get('bits')
-                assert int('0x'+_hash,16) < target
+                assert int('0x'+pow_hash,16) < target
             except Exception:
                 return False
+
+            raw_header = self.header_to_string(header)
+
+            # Store the block to the database (currently very inefficient, but correct on how to do it).
+            header_db_file = sqlite3.connect(self.db_path())
+            header_db = header_db_file.cursor()
+            header_db.execute('''INSERT OR REPLACE INTO headers VALUES ('%s', '%s', '%s')''' % (raw_header, algo, str(height)))
+            header_db_file.commit()
+            header_db_file.close()
 
             prev_header = header
 
@@ -218,10 +235,10 @@ class Blockchain(threading.Thread):
             bits, target = self.get_target(height, algo)
 
             # Print the block
-            #print_error("height: %i\tversion: %i" % (height, version))
-            #print_error("hash: %i %s" % (height, _hash))
-            #print_error("PoW hash: %s" % (pow_hash, ))
-            #print_error("header: %s\n" % (header, ))
+            print_error("height: %i\tversion: %i" % (height, version))
+            print_error("hash: %i %s" % (height, _hash))
+            print_error("PoW hash: %s" % (pow_hash, ))
+            print_error("header: %s\n" % (header, ))
 
             assert previous_hash == header.get('prev_block_hash')
             assert bits == header.get('bits')
@@ -498,7 +515,7 @@ class Blockchain(threading.Thread):
         lastheight = height - 1
         firstheight = lastheight - 50
         first = self.get_block_by_height((firstheight))
-        prev_algo_height = self.getlastblockindexforalgo((height), algo)
+        prev_algo_height = self.getlastblockindexforalgo(height, algo)
         if prev_algo_height is None:
             #print_error("Returning default diff")
             return max_bits, max_target
@@ -626,8 +643,6 @@ class Blockchain(threading.Thread):
         return(header_data)
 
     def getlastblockindexforalgo(self, height, algo):
-        #print_error(height)
-        #print_error(algo)
         header_db_file = sqlite3.connect(self.db_path())
         header_db = header_db_file.cursor()
         header_db.execute("SELECT height FROM headers WHERE height<? AND algo=? ORDER BY height DESC LIMIT 1", (height, algo))
