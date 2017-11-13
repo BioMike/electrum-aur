@@ -276,7 +276,6 @@ class Blockchain(threading.Thread):
         return rev_hex(py_bca_skein.getPoWHash(self.header_to_string(header).decode('hex')).encode('hex'))
 
     def pow_hash_groestl_header(self,header):
-        print_error("groestl_header")
         print_error(header)
         return rev_hex(groestl_hash.getGroestlMyrHash(self.header_to_string(header).decode('hex'), len(self.header_to_string(header))).encode('hex'))
 
