@@ -22,6 +22,7 @@ from util import user_dir, appdata_dir, print_error, print_msg
 from bitcoin import *
 import hashlib
 import sqlite3
+import math
 
 try:
     from ltc_scrypt import getPoWHash as getPoWScryptHash
@@ -30,11 +31,22 @@ except ImportError:
     from scrypt import scrypt_1024_1_1_80 as getPoWScryptHash
 
 try:
-    from groestl_hash import getGroestlcoinHash as getPoWGroestlHash
+    import groestl_hash
 except ImportError:
     print_msg("Warning: groestl_hash not available, please install it")
     raise
 
+try:
+    import py_bca_skein
+except ImportError:
+    print_msg("Warning: py_bca_skein not available, please install it")
+    raise
+
+try:
+    import qubit_hash
+except ImportError:
+    print_msg("Warning: qubit_hash not available, please install it")
+    raise
 
 
 class Blockchain(threading.Thread):
@@ -182,38 +194,43 @@ class Blockchain(threading.Thread):
             raw_header = data[i*80:(i+1)*80]
             header = self.header_from_string(raw_header)
 
-            bits, target = self.get_target(height, header)
             _hash = self.hash_header(header)
             version = header.get('version')
             if version <= 2:
+                algo = "scrypt"
                 pow_hash = self.pow_hash_scrypt_header(header)
             elif version == 514:
-                pow_hash = self.pow_hash_scrypt_header(header)
+                algo = "sha256d"
+                pow_hash = self.pow_hash_sha_header(header)
+                _hash = pow_hash
             elif version == 1026:
+                algo = "groestl"
                 pow_hash = self.pow_hash_groestl_header(header)
             elif version == 1538:
+                algo = "skein"
                 pow_hash = self.pow_hash_skein_header(header)
             elif version == 2050:
+                algo = "qubit"
                 pow_hash = self.pow_hash_qubit_header(header)
             else:
                 print_error( "error unknown block version")
 
+            bits, target = self.get_target(height, algo)
+
             # Print the block
-            print_error("hash: %i %s" % (height, _hash))
-            print_error("PoW hash: %s" % (pow_hash, ))
-            print_error("header: %s" % (header, ))
-            print_error("version: %i\n" % (version, ))
+            #print_error("height: %i\tversion: %i" % (height, version))
+            #print_error("hash: %i %s" % (height, _hash))
+            #print_error("PoW hash: %s" % (pow_hash, ))
+            #print_error("header: %s\n" % (header, ))
 
             assert previous_hash == header.get('prev_block_hash')
-            #print_error("Bits: %i (calc) <=> %i (header)" % (bits, header.get('bits')))
             assert bits == header.get('bits')
-            #print_error("Target: %i (calc) <=> %i (pow)" % (target, int('0x'+pow_hash,16)))
             assert int('0x'+pow_hash,16) < target
 
             # Store the block to the database (currently very inefficient, but correct on how to do it).
             header_db_file = sqlite3.connect(self.db_path())
             header_db = header_db_file.cursor()
-            header_db.execute('''INSERT OR REPLACE INTO headers VALUES ('%s', '%s', '%s')''' % (raw_header.encode('hex'), str(2), str(height)))
+            header_db.execute('''INSERT OR REPLACE INTO headers VALUES ('%s', '%s', '%s')''' % (raw_header.encode('hex'), algo, str(height)))
             header_db_file.commit()
             header_db_file.close()
 
@@ -246,6 +263,7 @@ class Blockchain(threading.Thread):
         return h
 
     def hash_header(self, header):
+        # Hash originates from bitcoin.py
         return rev_hex(Hash(self.header_to_string(header).decode('hex')).encode('hex'))
 
     def pow_hash_scrypt_header(self, header):
@@ -255,17 +273,19 @@ class Blockchain(threading.Thread):
         return self.hash_header(header)
 
     def pow_hash_skein_header(self,header):
-        return rev_hex(getPoWSkeinHash(self.header_to_string(header).decode('hex')).encode('hex'))
+        return rev_hex(py_bca_skein.getPoWHash(self.header_to_string(header).decode('hex')).encode('hex'))
 
     def pow_hash_groestl_header(self,header):
-        return rev_hex(getPoWGroestlHash(self.header_to_string(header).decode('hex')).encode('hex'))
+        print_error("groestl_header")
+        print_error(header)
+        return rev_hex(groestl_hash.getGroestlMyrHash(self.header_to_string(header).decode('hex'), len(self.header_to_string(header))).encode('hex'))
 
     def pow_hash_qubit_header(self,header):
-        return rev_hex(getPoWQubitHash(self.header_to_string(header).decode('hex')).encode('hex'))
+        return rev_hex(qubit_hash.getPoWHash(self.header_to_string(header).decode('hex')).encode('hex'))
 
     def path(self):
         return os.path.join( self.config.path, 'blockchain_headers')
-    
+
     def db_path(self):
         return os.path.join(self.config.path, 'headers.db')
 
@@ -274,8 +294,7 @@ class Blockchain(threading.Thread):
         filename = self.path()
         if os.path.exists(filename):
             return
-        
-        
+
         # The self.headers_url location is not hosting the headers any more.
         # Disable the download and create the default file to be populated.
         #try:
@@ -328,9 +347,8 @@ class Blockchain(threading.Thread):
                 return h 
 
 
-    def get_target(self, height, header):
+    def get_target(self, height, algo):
 
-        max_target = 0x00000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
         if height <= 135:
             # Return default values below block 135.
             return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
@@ -338,13 +356,14 @@ class Blockchain(threading.Thread):
             # Return original diff algorithm calculated values.
             bits, target = self.target_orig(height)
             return bits, target
-        if height < 225000:
+        if height <= 225000:
             # Return KGW calculated values.
             bits, target = self.target_kgw(height)
             return bits, target
         else:
             # Return multi-algo calculated values.
-            return 0x1E0FFFFF, 0x00000FFFFF000000000000000000000000000000000000000000000000000000
+            bits, target = self.target_multi(height, algo)
+            return bits, target
 
     def bits_to_target(self, bits):
         # bits to target
@@ -392,7 +411,6 @@ class Blockchain(threading.Thread):
             nActualTimespan = nActualTimespanMin
         if (nActualTimespan > nActualTimespanMax):
             nActualTimespan = nActualTimespanMax
-
         new_target_calc = min(max_target, ((target * nActualTimespan) // nTargetTimespan))
         # convert new target to bits (and to new_target)
         new_bits = self.target_to_bits(new_target_calc)
@@ -466,6 +484,66 @@ class Blockchain(threading.Thread):
         new_bits = self.target_to_bits(new_target_calc)
         new_target = self.bits_to_target(new_bits)
         return new_bits, new_target
+
+    def target_multi(self, height, algo):
+        if algo is 'qubit':
+            max_bits = 0x1E03FFFF
+        elif algo is 'sha256d':
+            max_bits = 0x1D00FFFF
+        else:
+            max_bits = 0x1E01FFFF
+        max_target = self.bits_to_target(max_bits)
+        nAveragingTargetTimespan = 10 * 5 * 61
+        minActualTimespan = nAveragingTargetTimespan * (100 - 8) / 100
+        maxActualTimespan = nAveragingTargetTimespan * (100 + 16) / 100
+        lastheight = height - 1
+        firstheight = lastheight - 50
+        first = self.get_block_by_height((firstheight))
+        prev_algo_height = self.getlastblockindexforalgo((height), algo)
+        if prev_algo_height is None:
+            #print_error("Returning default diff")
+            return max_bits, max_target
+        prev_algo = self.get_block_by_height(prev_algo_height)
+
+        # Limit adjustment step
+        # Use medians to prevent time-warp attacks
+        actualTimespan = self.getmediantimepast(lastheight) - self.getmediantimepast(firstheight)
+
+        # The next part is split in two, due to a difference in how
+        # integer divisions work between c++ and python, c++ gravitates towards
+        # 0, while python always floors. This is a problem for negative results
+        # of the division.
+        actualTimespan = (actualTimespan - nAveragingTargetTimespan)/4.0
+        if actualTimespan < 0:
+            actualTimespan = int(math.ceil(actualTimespan))
+        elif actualTimespan > 0:
+            actualTimespan = int(math.floor(actualTimespan))
+
+        actualTimespan = nAveragingTargetTimespan + actualTimespan
+        if (actualTimespan < minActualTimespan):
+            actualTimespan = minActualTimespan
+        if (actualTimespan > maxActualTimespan):
+            actualTimespan = maxActualTimespan
+
+        # Global retarget
+        target = self.bits_to_target(prev_algo.get('bits'))
+        new_target_calc = (target * actualTimespan) // nAveragingTargetTimespan
+
+        # Per-algo retarget
+        adjustments = prev_algo_height + 5 - 1 - lastheight
+        if adjustments > 0:
+            while adjustments:
+                new_target_calc = ((new_target_calc * 100) // (100 + 4))
+                adjustments -= 1
+        elif adjustments < 0:
+            while adjustments:
+                new_target_calc = ((new_target_calc * (100 + 4)) // 100 )
+                adjustments += 1
+        new_target_calc = min(max_target, new_target_calc)
+        new_bits = self.target_to_bits(new_target_calc)
+        new_target = self.bits_to_target(new_bits)
+        return new_bits, new_target
+
 
     def request_header(self, i, h, queue):
         print_error("requesting header %d from %s"%(h, i.server))
@@ -547,3 +625,36 @@ class Blockchain(threading.Thread):
         header_db_file.commit()
         header_db_file.close()
         return(header_data)
+
+    def getlastblockindexforalgo(self, height, algo):
+        #print_error(height)
+        #print_error(algo)
+        header_db_file = sqlite3.connect(self.db_path())
+        header_db = header_db_file.cursor()
+        header_db.execute("SELECT height FROM headers WHERE height<? AND algo=? ORDER BY height DESC LIMIT 1", (height, algo))
+        result = header_db.fetchone()
+        if result is not None:
+            height_new = result[0]
+            #print_error(height_new)
+            header_db_file.commit()
+            header_db_file.close()
+        else:
+            height_new = None
+        return(height_new)
+
+    def getmediantimepast(self, height):
+        medianTimespan = 11
+        timelist = []
+        while(medianTimespan > 0):
+            # get times from height to height - 11
+            block = self.get_block_by_height(height)
+            timelist.append(block.get('timestamp'))
+            medianTimespan -= 1
+            height -= 1
+        # sort times
+        timelist.sort()
+        # return index 6 (start counting at 0!)
+        return(timelist[5])
+    
+    
+    
