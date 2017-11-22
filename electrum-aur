@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Electrum - lightweight Bitcoin client
 # Copyright (C) 2011 thomasv@gitorious
@@ -38,14 +38,13 @@ is_android = 'ANDROID_DATA' in os.environ
 if is_local:
     sys.path.append('packages')
 
-import __builtin__
-__builtin__.use_local_modules = is_local or is_android
+import builtins
+builtins.use_local_modules = is_local or is_android
 
 # load local module as electrum
-if __builtin__.use_local_modules:
-    import imp
-    imp.load_module('electrum_dgb', *imp.find_module('lib'))
-    imp.load_module('electrum_dgb_gui', *imp.find_module('gui'))
+if builtins.use_local_modules:
+    import lib
+    import gui
 
 
 from electrum_dgb import util
@@ -251,7 +250,7 @@ if __name__ == '__main__':
                 print_msg("Daemon stopped")
             network.stop()
         else:
-            print "unknown command \"%s\""% arg
+            print("unknown command \"%s\"" % arg)
         sys.exit(0)
 
 

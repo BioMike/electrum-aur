@@ -56,8 +56,8 @@ def user_dir():
 
 
 def data_dir():
-    import __builtin__
-    if __builtin__.use_local_modules:
+    import builtins
+    if builtins.use_local_modules:
         return local_data_dir()
     else:
         return appdata_dir()
@@ -217,9 +217,9 @@ def raw_input(prompt=None):
     if prompt:
         sys.stdout.write(prompt)
     return builtin_raw_input()
-import __builtin__
-builtin_raw_input = __builtin__.raw_input
-__builtin__.raw_input = raw_input
+import builtins
+builtin_raw_input = builtins.input
+builtins.input = input
 
 
 
@@ -267,7 +267,7 @@ class SocketPipe:
                 raise timeout
             except ssl.SSLError:
                 raise timeout
-            except socket.error, err:
+            except socket.error as err:
                 if err.errno == 60:
                     raise timeout
                 elif err.errno in [11, 10035]:
@@ -318,19 +318,19 @@ class SocketPipe:
 
 
 
-import Queue
+import queue
 
 class QueuePipe:
 
     def __init__(self, send_queue=None, get_queue=None):
-        self.send_queue = send_queue if send_queue else Queue.Queue()
-        self.get_queue = get_queue if get_queue else Queue.Queue()
+        self.send_queue = send_queue if send_queue else queue.Queue()
+        self.get_queue = get_queue if get_queue else queue.Queue()
         self.set_timeout(0.1)
 
     def get(self):
         try:
             return self.get_queue.get(timeout=self.timeout)
-        except Queue.Empty:
+        except queue.Empty:
             raise timeout
 
     def get_all(self):
@@ -339,7 +339,7 @@ class QueuePipe:
             try:
                 r = self.get_queue.get_nowait()
                 responses.append(r)
-            except Queue.Empty:
+            except queue.Empty:
                 break
         return responses
 
